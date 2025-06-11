@@ -8,7 +8,7 @@ def get_bonds_with_filters(
     years_to_maturity=None
 ):
     url = "https://iss.moex.com/iss/engines/stock/markets/bonds/securities.json"
-    params = {'limit': 100, 'iss.meta': 'off'}
+    params = {'iss.meta': 'off'}
     if credit_rating:
         params['creditrating'] = credit_rating.upper()
     if min_coupon is not None:
@@ -28,3 +28,31 @@ def get_bonds_with_filters(
     except requests.RequestException as e:
         print(f"API Error: {e}")
         return []
+
+def get_bonds_with_ticker(ticker):
+    url = f"https://iss.moex.com/iss/engines/stock/markets/bonds/securities/{ticker}.json"
+    try:
+        resp = requests.get(url, params={'iss.meta': 'off'})
+        resp.raise_for_status()
+        j = resp.json()
+
+        # Основные данные
+        sec = j.get('securities', {})
+        cols, rows = sec.get('columns', []), sec.get('data', [])
+        if not rows:
+            return None
+        data = dict(zip(cols, rows[0]))
+
+        # Рыночные данные по торгам
+        md = j.get('marketdata', {})
+        mcols, mrows = md.get('columns', []), md.get('data', [])
+        market = dict(zip(mcols, mrows[0])) if mrows else {}
+
+        # Доходности
+        yld = j.get('marketdata_yields', {})
+        ycols, yrows = yld.get('columns', []), yld.get('data', [])
+        yields = dict(zip(ycols, yrows[0])) if yrows else {}
+    except Exception as e:
+        print(f"Error fetching ticker: {e}")
+        return "Ошибка"
+    return data, market, yields

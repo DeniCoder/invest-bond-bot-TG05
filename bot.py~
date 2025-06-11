@@ -1,11 +1,12 @@
 import asyncio
+import requests
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
 from aiogram.types import (
     Message, CallbackQuery,
 )
 from config import BOT_TOKEN
-from filters import get_bonds_with_filters, get_bonds_with_ticker
+from filters import get_bonds_with_filters
 from keyboard import main_menu, filter_menu
 
 bot = Bot(token=BOT_TOKEN)
@@ -85,25 +86,21 @@ async def process_input(message: Message):
         await message.answer("Фильтр установлен. Продолжайте или примените фильтры:", reply_markup=filter_menu)
     else:
         ticker = message.text.strip().upper()
-        bond = get_bonds_with_ticker(ticker)
-        if bond is None:
-            await message.answer(f"Облигация с тикером {ticker} не найдена")
-            return
-        elif bond == "Ошибка":
-            await message.answer("Ошибка при получении данных. Попробуйте позже.")
-            return
-        else:
+        
             await message.answer(
-                f"📊 Информация по {ticker}:\n\n"
-                f"🏛 Эмитент: {bond['data'].get('SECNAME', '')}\n"
-                f"💰 Номинал: {bond['data'].get('FACEVALUE', '')} {bond['data'].get('CURRENCYID', '')}\n"
-                f"📅 Погашение: {bond['data'].get('MATDATE', '')}\n"
-                f"📈 Купон: {bond['data'].get('COUPONVALUE', '')}%\n"
-                f"📉 Доходность: {bond['market'].get('YIELD', '') or bond['yields'].get('EFFECTIVEYIELD', '')}%\n"
-                f"🏷 Рейтинг: {bond['data'].get('CREDITRATING', '')}\n"
-                f"📦 Амортизация: {'Да' if bond['data'].get('AMORTIZATIONDATE') and bond.data['AMORTIZATIONDATE'] != '0000-00-00' else 'Нет'}\n"
-                f"📂 Оферта: {'Да' if bond['data'].get('OFFERDATE') and bond.data['OFFERDATE'] != '0000-00-00' else 'Нет'}"
+                f"📊 Инфо по {ticker}:\n\n"
+                f"🏛 Эмитент: {info.get('ISSUER','')}\n"
+                f"💰 Номинал: {data.get('FACEVALUE','')} {data.get('CURRENCYID','')}\n"
+                f"📅 Погашение: {data.get('MATDATE','')}\n"
+                f"📈 Купон: {data.get('COUPONVALUE','')}%\n"
+                f"📉 Доходность: {market.get('YIELD','') or yields.get('EFFECTIVEYIELD','')}%\n"
+                f"🏷 Рейтинг: {info.get('CREDITRATING','')}\n"
+                f"📦 Амортизация: {'Да' if data.get('AMORTIZATIONDATE') and data['AMORTIZATIONDATE']!='0000-00-00' else 'Нет'}\n"
+                f"📂 Оферта: {'Да' if data.get('OFFERDATE') and data['OFFERDATE']!='0000-00-00' else 'Нет'}"
             )
+        except Exception as e:
+            print(f"Error: {e}")
+            await message.answer("Ошибка при получении данных. Попробуйте позже.")
 
 async def main():
     await dp.start_polling(bot)
