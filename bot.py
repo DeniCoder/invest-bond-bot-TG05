@@ -95,7 +95,7 @@ async def process_input(message: Message):
         else:
             await message.answer(
                 f"📊 Информация по {ticker}:\n\n"
-                f"🏛 Эмитент: {bond['data'].get('SECNAME', '')}\n"
+                f"🏛 Наименование: {bond['data'].get('SECNAME', '')}\n"
                 f"💰 Номинал: {bond['data'].get('FACEVALUE', '')} {bond['data'].get('CURRENCYID', '')}\n"
                 f"📅 Погашение: {bond['data'].get('MATDATE', '')}\n"
                 f"📈 Купон: {bond['data'].get('COUPONVALUE', '')}%\n"
