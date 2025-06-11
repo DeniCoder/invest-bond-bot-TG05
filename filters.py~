@@ -1,0 +1,187 @@
+import requests
+from datetime import datetime
+from typing import Optional, List, Dict, Any, Tuple
+
+
+def get_bonds_with_filters(
+        credit_rating: Optional[str] = None,
+        min_coupon: Optional[float] = None,
+        min_yield: Optional[float] = None,
+        years_to_maturity: Optional[int] = None
+) -> List[Dict[str, Any]]:
+    """
+    Получение списка облигаций с фильтрацией по параметрам.
+
+    Args:
+        credit_rating: Кредитный рейтинг
+        min_coupon: Минимальная купонная доходность
+        min_yield: Минимальная доходность к погашению
+        years_to_maturity: Максимальный срок до погашения в годах
+
+    Returns:
+        Список словарей с данными об облигациях
+    """
+    url = "https://iss.moex.com/iss/engines/stock/markets/bonds/securities.json"
+    params = {'iss.meta': 'off'}
+
+    try:
+        # Получаем все облигации
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+        securities = data.get('securities', {})
+        columns = securities.get('columns', [])
+        rows = securities.get('data', [])
+
+        # Преобразуем в список словарей
+        bonds = [dict(zip(columns, row)) for row in rows]
+
+        # Применяем фильтры
+        filtered_bonds = []
+        today = datetime.now()
+
+        for bond in bonds:
+            # Проверяем, что это облигация
+            if not bond.get('SECTYPE') in ['1', 'corporate_bond', 'government_bond', 'municipal_bond']:
+                continue
+
+            # Фильтр по кредитному рейтингу
+            if credit_rating:
+                bond_rating = bond.get('CREDITRATING', '').upper()
+                if credit_rating.upper() not in bond_rating:
+                    continue
+
+            # Фильтр по купонной доходности
+            if min_coupon is not None:
+                coupon_value = bond.get('COUPONVALUE')
+                if not coupon_value or float(coupon_value) < min_coupon:
+                    continue
+
+            # Фильтр по доходности к погашению
+            if min_yield is not None:
+                yield_value = bond.get('YIELD') or bond.get('EFFECTIVEYIELD')
+                if not yield_value or float(yield_value) < min_yield:
+                    continue
+
+            # Фильтр по сроку до погашения
+            if years_to_maturity:
+                matdate = bond.get('MATDATE')
+                if matdate:
+                    try:
+                        mat_date = datetime.strptime(matdate, '%Y-%m-%d')
+                        years_left = (mat_date - today).days / 365.25
+                        if years_left > years_to_maturity:
+                            continue
+                    except (ValueError, TypeError):
+                        continue
+
+            filtered_bonds.append(bond)
+
+        return filtered_bonds
+
+    except requests.RequestException as e:
+        print(f"API Error: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        return []
+
+
+def get_bonds_with_ticker(ticker: str) -> Optional[Tuple[Dict[str, Any], Dict[str, Any], Dict[str, Any]]]:
+    """
+    Получение информации об облигации по тикеру.
+
+    Args:
+        ticker: Тикер облигации (SECID)
+
+    Returns:
+        Кортеж из трех словарей: (данные облигации, рыночные данные, доходности)
+        или None если не найдено, или "Ошибка" при ошибке API
+    """
+    url = f"https://iss.moex.com/iss/engines/stock/markets/bonds/securities/{ticker}.json"
+
+    try:
+        response = requests.get(url, params={'iss.meta': 'off'}, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+
+        # Основные данные о ценной бумаге
+        securities = data.get('securities', {})
+        sec_columns = securities.get('columns', [])
+        sec_rows = securities.get('data', [])
+
+        if not sec_rows:
+            return None
+
+        security_data = dict(zip(sec_columns, sec_rows[0]))
+
+        # Рыночные данные
+        marketdata = data.get('marketdata', {})
+        market_columns = marketdata.get('columns', [])
+        market_rows = marketdata.get('data', [])
+
+        market_data = {}
+        if market_rows:
+            market_data = dict(zip(market_columns, market_rows[0]))
+
+        # Данные о доходности
+        marketdata_yields = data.get('marketdata_yields', {})
+        yields_columns = marketdata_yields.get('columns', [])
+        yields_rows = marketdata_yields.get('data', [])
+
+        yields_data = {}
+        if yields_rows:
+            yields_data = dict(zip(yields_columns, yields_rows[0]))
+
+        return security_data, market_data, yields_data
+
+    except requests.RequestException as e:
+        print(f"API Error for ticker {ticker}: {e}")
+        return "Ошибка"
+    except Exception as e:
+        print(f"Unexpected error for ticker {ticker}: {e}")
+        return "Ошибка"
+
+
+def search_bond_by_name(query: str) -> List[Dict[str, Any]]:
+    """
+    Поиск облигаций по названию или части названия.
+
+    Args:
+        query: Поисковый запрос
+
+    Returns:
+        Список найденных облигаций
+    """
+    url = "https://iss.moex.com/iss/securities.json"
+    params = {
+        'q': query,
+        'iss.meta': 'off'
+    }
+
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+
+        data = response.json()
+        securities = data.get('securities', {})
+        columns = securities.get('columns', [])
+        rows = securities.get('data', [])
+
+        # Фильтруем только облигации
+        bonds = []
+        for row in rows:
+            bond = dict(zip(columns, row))
+            if 'bond' in bond.get('type', '').lower():
+                bonds.append(bond)
+
+        return bonds
+
+    except requests.RequestException as e:
+        print(f"Search API Error: {e}")
+        return []
+    except Exception as e:
+        print(f"Unexpected search error: {e}")
+        return []
